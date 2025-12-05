@@ -1,4 +1,5 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart as BarChartIcon } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ProjectStatusChart({ projects, tasks, onProjectClick }) {
     // Calcular estado de cada proyecto
@@ -29,7 +30,7 @@ export default function ProjectStatusChart({ projects, tasks, onProjectClick }) 
     return (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
             <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2">
-                <BarChart className="h-5 w-5" />
+                <BarChartIcon className="h-5 w-5" />
                 Estado de Proyectos
             </h3>
 
