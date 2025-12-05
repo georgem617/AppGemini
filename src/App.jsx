@@ -22,6 +22,7 @@ import UserModal from './components/modals/UserModal';
 
 // Utils
 import { validateTaskTitle } from './utils/validation';
+import { getTasksWithRelations, createTaskWithAssignments, updateSubtasks, updateTaskAssignments } from './utils/dbQueries';
 
 export default function AppGemini() {
   // View State
@@ -63,17 +64,19 @@ export default function AppGemini() {
       setIsLoading(true);
       setError(null);
 
-      const { data: t, error: tErr } = await supabase.from('tasks').select('*');
+      // Usar nueva query con relaciones
+      const tasksData = await getTasksWithRelations();
+      setTasks(tasksData);
+
       const { data: p, error: pErr } = await supabase.from('projects').select('*');
       const { data: c, error: cErr } = await supabase.from('clients').select('*');
       const { data: tm, error: tmErr } = await supabase.from('team').select('*');
 
-      if (tErr) throw new Error(`Error al cargar tareas: ${tErr.message}`);
       if (pErr) throw new Error(`Error al cargar proyectos: ${pErr.message}`);
       if (cErr) throw new Error(`Error al cargar clientes: ${cErr.message}`);
       if (tmErr) throw new Error(`Error al cargar equipo: ${tmErr.message}`);
 
-      if (t) setTasks(t);
+
       if (p) setProjects(p);
       if (c) setClients(c);
       if (tm) setTeamMembers(tm);
@@ -98,7 +101,6 @@ export default function AppGemini() {
   // Handlers with error handling
   const handleAddTask = async () => {
     try {
-      // Validate
       const validation = validateTaskTitle(newTask.title);
       if (!validation.isValid) {
         setError(validation.error);
@@ -106,27 +108,32 @@ export default function AppGemini() {
       }
 
       setIsLoading(true);
-      setError(null);
 
-      let finalProjectName = newTask.projectName;
-      if (newTask.projectId) {
-        const p = projects.find(proj => proj.id === newTask.projectId);
-        if (p) finalProjectName = p.name;
-      }
-
-      const { error: insertError } = await supabase.from('tasks').insert([{
-        ...newTask,
-        projectName: finalProjectName,
-        createdAt: new Date().toISOString()
-      }]);
-
-      if (insertError) throw new Error(insertError.message);
+      // Usar nueva función con asignaciones
+      await createTaskWithAssignments(
+        {
+          title: newTask.title,
+          projectId: newTask.projectId ? newTask.projectId : null,
+          status: 'backlog',
+          priority: 'media',
+          planned_day: 'backlog'
+        },
+        newTask.assignees || []
+      );
 
       await fetchData();
       setTaskModalOpen(false);
+      // Reset state, keeping minimal defaults
       setNewTask({
-        title: '', status: 'backlog', priority: 'media', projectId: '', projectName: '',
-        plannedDay: 'backlog', recurrence: 'none', dueDate: '', assignees: [], subtasks: []
+        title: '',
+        status: 'backlog',
+        priority: 'media',
+        projectId: '',
+        plannedDay: 'backlog',
+        recurrence: 'none',
+        dueDate: '',
+        assignees: [],
+        subtasks: []
       });
     } catch (err) {
       console.error('Error adding task:', err);
@@ -143,17 +150,26 @@ export default function AppGemini() {
       setIsLoading(true);
       setError(null);
 
+      // 1. Actualizar tarea principal
       const { error: updateError } = await supabase.from('tasks').update({
         title: editingTask.title,
         status: editingTask.status,
         priority: editingTask.priority,
-        assignees: editingTask.assignees,
-        subtasks: editingTask.subtasks,
-        notes: editingTask.notes,
-        dueDate: editingTask.dueDate
+        dueDate: editingTask.dueDate,
+        notes: editingTask.notes
       }).eq('id', editingTask.id);
 
       if (updateError) throw new Error(updateError.message);
+
+      // 2. Actualizar asignaciones de tarea
+      await updateTaskAssignments(editingTask.id, editingTask.assignees || []);
+
+      // 3. Actualizar subtasks
+      if (editingTask.subtasks) {
+        await updateSubtasks(editingTask.id, editingTask.subtasks);
+      }
+
+
 
       await fetchData();
       setDetailModalOpen(false);
@@ -317,16 +333,44 @@ export default function AppGemini() {
                 </h2>
               </div>
               <div className="flex-1 overflow-y-auto space-y-2">
-                {getFilteredTasks()
-                  .filter(t => t.projectId === selectedProjectId && t.status !== 'done')
-                  .map(t => (
-                    <TaskCard
-                      key={t.id}
-                      task={t}
-                      onTaskClick={handleTaskClick}
-                      onStatusToggle={handleUpdateTaskStatus}
-                    />
-                  ))}
+                <div className="space-y-6">
+                  {/* Pendientes */}
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-400 mb-2 uppercase tracking-wider">Pendientes</h3>
+                    <div className="space-y-2">
+                      {getFilteredTasks()
+                        .filter(t => t.projectId === selectedProjectId && t.status !== 'done')
+                        .map(t => (
+                          <TaskCard
+                            key={t.id}
+                            task={t}
+                            onTaskClick={handleTaskClick}
+                            onStatusToggle={handleUpdateTaskStatus}
+                          />
+                        ))}
+                      {getFilteredTasks().filter(t => t.projectId === selectedProjectId && t.status !== 'done').length === 0 && (
+                        <p className="text-zinc-600 text-sm italic">No hay tareas pendientes</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Completadas */}
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-500 mb-2 uppercase tracking-wider">Completadas</h3>
+                    <div className="space-y-2 opacity-60">
+                      {getFilteredTasks()
+                        .filter(t => t.projectId === selectedProjectId && t.status === 'done')
+                        .map(t => (
+                          <TaskCard
+                            key={t.id}
+                            task={t}
+                            onTaskClick={handleTaskClick}
+                            onStatusToggle={handleUpdateTaskStatus}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
