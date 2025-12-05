@@ -1,0 +1,541 @@
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import {
+  Layout, Calendar, CheckSquare, Users, Briefcase, Plus, Search,
+  ArrowLeft, CheckCircle2, X, Clock, Filter, ListTodo, Trash2,
+  UserPlus, RefreshCcw, User, ChevronDown, ChevronUp, Save,
+  AlignLeft, Repeat, CalendarDays, ArrowUpRight, PieChart, BarChart2
+} from 'lucide-react';
+
+// --- CONFIGURACIÓN SUPABASE ---
+// ⚠️ ASEGÚRATE DE QUE ESTAS CLAVES SEAN LAS TUYAS (YA ESTÁN PUESTAS SEGÚN TU CÓDIGO ANTERIOR)
+const supabaseUrl = 'https://fauoeaxmiaezeuueaudd.supabase.co';
+const supabaseKey = 'sb_publishable_vq0BfFF__Py353xRWIgTiw_P-WrHsAm';
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+const appId = 'agency-os-default';
+
+// --- COMPONENTES UI ---
+
+const Badge = ({ children, color = 'gray', className = '', onClick }) => {
+  const colors = {
+    gray: 'bg-zinc-800 text-zinc-300 border-zinc-700',
+    blue: 'bg-blue-900/30 text-blue-300 border-blue-800',
+    green: 'bg-emerald-900/30 text-emerald-300 border-emerald-800',
+    yellow: 'bg-amber-900/30 text-amber-300 border-amber-800',
+    red: 'bg-red-900/30 text-red-300 border-red-800',
+  };
+  return (
+    <span onClick={onClick} className={`px-2 py-0.5 rounded text-xs font-medium border ${colors[color]} ${className} ${onClick ? 'cursor-pointer hover:brightness-110' : ''}`}>
+      {children}
+    </span>
+  );
+};
+
+const Avatar = ({ name, size = 'md' }) => {
+  const sizes = { sm: 'w-5 h-5 text-[9px]', md: 'w-8 h-8 text-xs', lg: 'w-12 h-12 text-lg' };
+  return (
+    <div className={`${sizes[size]} bg-zinc-700 rounded-full flex items-center justify-center text-zinc-200 font-bold border border-zinc-600 flex-shrink-0`} title={name}>
+      {name ? name.substring(0, 2).toUpperCase() : <User size={12} />}
+    </div>
+  );
+};
+
+const Card = ({ children, className = '', onClick }) => (
+  <div onClick={onClick} className={`bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-zinc-200 ${className}`}>
+    {children}
+  </div>
+);
+
+const Input = ({ label, ...props }) => (
+  <div className="flex flex-col gap-1.5 mb-4 w-full">
+    {label && <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{label}</label>}
+    <input className="bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-zinc-600 w-full" {...props} />
+  </div>
+);
+
+const Select = ({ label, options, ...props }) => (
+  <div className="flex flex-col gap-1.5 mb-4 w-full">
+    {label && <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{label}</label>}
+    <select className="bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none w-full" {...props}>
+      {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+    </select>
+  </div>
+);
+
+// --- APP PRINCIPAL ---
+
+export default function AgencyOS() {
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
+
+  const [tasks, setTasks] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+
+  // Filters & Nav
+  const [filterUser, setFilterUser] = useState('all');
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState(null);
+
+  // Modals
+  const [isTaskModalOpen, setTaskModalOpen] = useState(false);
+  const [isDetailModalOpen, setDetailModalOpen] = useState(false);
+  const [isProjectModalOpen, setProjectModalOpen] = useState(false);
+  const [isClientModalOpen, setClientModalOpen] = useState(false);
+  const [isUserModalOpen, setUserModalOpen] = useState(false);
+
+  // Edits
+  const [editingTask, setEditingTask] = useState(null);
+  const [newTask, setNewTask] = useState({
+    title: '', status: 'backlog', priority: 'media', projectId: '', projectName: '', plannedDay: 'backlog', recurrence: 'none', dueDate: '', assignees: [], subtasks: []
+  });
+  const [newProject, setNewProject] = useState({ name: '', clientId: '', lead: '' });
+  const [newClient, setNewClient] = useState({ name: '', contactPerson: '', email: '' });
+  const [newUser, setNewUser] = useState({ name: '', role: '', email: '' });
+  const [tempSubtask, setTempSubtask] = useState('');
+
+  // --- SUPABASE DATA FETCHING ---
+  const fetchData = async () => {
+    const { data: t } = await supabase.from('tasks').select('*');
+    const { data: p } = await supabase.from('projects').select('*');
+    const { data: c } = await supabase.from('clients').select('*');
+    const { data: tm } = await supabase.from('team').select('*');
+
+    if (t) setTasks(t);
+    if (p) setProjects(p);
+    if (c) setClients(c);
+    if (tm) setTeamMembers(tm);
+  };
+
+  useEffect(() => {
+    fetchData();
+    const channel = supabase.channel('realtime_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, fetchData)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // --- LOGIC ---
+
+  const handleAddTask = async () => {
+    if (!newTask.title) return;
+    let finalProjectName = newTask.projectName;
+    if (newTask.projectId) {
+      const p = projects.find(proj => proj.id === newTask.projectId);
+      if (p) finalProjectName = p.name;
+    }
+
+    await supabase.from('tasks').insert([{
+      ...newTask,
+      projectName: finalProjectName,
+      createdAt: new Date().toISOString()
+    }]);
+
+    fetchData();
+    setTaskModalOpen(false);
+  };
+
+  const handleSaveChanges = async () => {
+    if (!editingTask) return;
+    await supabase.from('tasks').update({
+      title: editingTask.title,
+      status: editingTask.status,
+      priority: editingTask.priority,
+      assignees: editingTask.assignees,
+      subtasks: editingTask.subtasks,
+      notes: editingTask.notes,
+      dueDate: editingTask.dueDate
+    }).eq('id', editingTask.id);
+
+    fetchData();
+    setDetailModalOpen(false);
+  };
+
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+    fetchData();
+  };
+
+  const handleConvertSubtaskToTask = async (subId) => {
+    const subtask = editingTask.subtasks.find(s => s.id === subId);
+    if (!subtask) return;
+
+    if (!confirm(`¿Crear tarea nueva a partir de "${subtask.title}"?`)) return;
+
+    const updatedSubtasks = editingTask.subtasks.filter(s => s.id !== subId);
+    setEditingTask({ ...editingTask, subtasks: updatedSubtasks });
+
+    await supabase.from('tasks').update({ subtasks: updatedSubtasks }).eq('id', editingTask.id);
+
+    await supabase.from('tasks').insert([{
+      title: subtask.title,
+      status: 'todo',
+      priority: editingTask.priority,
+      projectId: editingTask.projectId || '',
+      projectName: editingTask.projectName || '',
+      plannedDay: 'backlog',
+      assignees: subtask.assignees || [],
+      dueDate: '',
+      subtasks: [],
+      createdAt: new Date().toISOString()
+    }]);
+
+    fetchData();
+    alert("✅ Subtarea convertida correctamente.");
+  };
+
+  const handleDeleteTask = async () => {
+    if (confirm("¿Eliminar permanentemente?")) {
+      await supabase.from('tasks').delete().eq('id', editingTask.id);
+      fetchData();
+      setDetailModalOpen(false);
+    }
+  };
+
+  // --- HELPERS ---
+  const getFilteredTasks = () => {
+    if (filterUser === 'all') return tasks;
+    return tasks.filter(t => t.assignees?.includes(filterUser) || t.subtasks?.some(s => s.assignees?.includes(filterUser)));
+  };
+
+  const getFilteredProjects = () => {
+    if (filterUser === 'all') return projects;
+    return projects.filter(p => p.lead === filterUser);
+  };
+
+  // --- COMPONENTES ---
+
+  const TaskCard = ({ task }) => {
+    const completedSub = task.subtasks?.filter(s => s.completed).length || 0;
+    const totalSub = task.subtasks?.length || 0;
+    const percent = totalSub > 0 ? Math.round((completedSub / totalSub) * 100) : 0;
+
+    return (
+      <div
+        onClick={() => { setEditingTask(JSON.parse(JSON.stringify(task))); setDetailModalOpen(true); }}
+        className="bg-zinc-900 border border-zinc-800 p-3 rounded mb-2 cursor-pointer hover:border-zinc-600 group"
+      >
+        <div className="flex justify-between items-start">
+          <div className="flex gap-3 items-start">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleUpdateTaskStatus(task.id, task.status === 'done' ? 'backlog' : 'done'); }}
+              className={`mt-1 w-4 h-4 rounded border flex items-center justify-center ${task.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-black' : 'border-zinc-600'}`}
+            >
+              {task.status === 'done' && <CheckCircle2 size={12} />}
+            </button>
+            <div>
+              <span className={`text-sm ${task.status === 'done' ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>{task.title}</span>
+              <div className="flex gap-2 mt-1">
+                {task.projectName && <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Briefcase size={10} /> {task.projectName}</span>}
+                {task.dueDate && <span className="text-[10px] text-amber-500 flex items-center gap-1"><CalendarDays size={10} /> {task.dueDate}</span>}
+              </div>
+            </div>
+          </div>
+          <Badge color={task.priority === 'alta' ? 'red' : 'gray'}>{task.priority}</Badge>
+        </div>
+        {totalSub > 0 && (
+          <div className="mt-2 flex items-center gap-2 pl-7">
+            <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="bg-indigo-500 h-full" style={{ width: `${percent}%` }}></div>
+            </div>
+            <span className="text-[10px] text-zinc-500">{completedSub}/{totalSub}</span>
+          </div>
+        )}
+      </div>
+    )
+  };
+
+  const DashboardView = () => {
+    const filteredP = getFilteredProjects();
+    const filteredT = getFilteredTasks();
+    const total = filteredT.length;
+    const done = filteredT.filter(t => t.status === 'done').length;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-4 gap-4">
+          <Card className="h-24 flex flex-col justify-between border-l-4 border-l-zinc-600"><span className="text-xs text-zinc-500 font-bold">TOTAL</span><span className="text-3xl font-bold text-white">{total}</span></Card>
+          <Card className="h-24 flex flex-col justify-between border-l-4 border-l-emerald-500"><span className="text-xs text-zinc-500 font-bold">HECHAS</span><span className="text-3xl font-bold text-white">{done}</span></Card>
+          <Card className="h-24 flex flex-col justify-between border-l-4 border-l-indigo-500"><span className="text-xs text-zinc-500 font-bold">PENDIENTES</span><span className="text-3xl font-bold text-white">{total - done}</span></Card>
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          <Card>
+            <h3 className="font-bold mb-4 flex items-center gap-2 text-white"><BarChart2 size={18} /> Avance Proyectos</h3>
+            <div className="space-y-3">
+              {filteredP.map(p => {
+                const pt = tasks.filter(t => t.projectId === p.id);
+                let items = 0, completed = 0;
+                pt.forEach(t => {
+                  items++; if (t.status === 'done') completed++;
+                  if (t.subtasks) { items += t.subtasks.length; completed += t.subtasks.filter(s => s.completed).length; }
+                });
+                const pct = items === 0 ? 0 : Math.round((completed / items) * 100);
+                return (
+                  <div key={p.id} className="cursor-pointer" onClick={() => { setSelectedProjectId(p.id); setCurrentView('projects') }}>
+                    <div className="flex justify-between text-xs mb-1 text-zinc-300"><span>{p.name}</span><span>{pct}%</span></div>
+                    <div className="w-full h-2 bg-zinc-800 rounded-full"><div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }}></div></div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        </div>
+      </div>
+    )
+  };
+
+  return (
+    <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
+      {/* SIDEBAR */}
+      <aside className="w-64 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+        <div className="h-16 flex items-center px-6 border-b border-zinc-800 font-bold text-lg">AgencyOS</div>
+        <nav className="flex-1 p-4 space-y-1">
+          {[{ id: 'dashboard', l: 'Dashboard', i: Layout }, { id: 'projects', l: 'Proyectos', i: Briefcase }, { id: 'tasks', l: 'Tareas', i: CheckSquare }, { id: 'clients', l: 'Clientes', i: Users }, { id: 'team', l: 'Equipo', i: UserPlus }].map(m => (
+            <button key={m.id} onClick={() => { setCurrentView(m.id); setSelectedProjectId(null); setSelectedClientId(null); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium ${currentView === m.id ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>
+              <m.i size={18} /> {m.l}
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      {/* MAIN */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden">
+        <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-8">
+          <div className="flex items-center gap-2 text-zinc-400">
+            <Filter size={16} />
+            <select className="bg-transparent text-sm focus:outline-none" value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+              <option value="all">Todo el Equipo</option>
+              {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+          </div>
+          <button onClick={() => { setNewTask({ title: '', status: 'backlog', priority: 'media', projectId: '', projectName: '', plannedDay: 'backlog', recurrence: 'none', dueDate: '', assignees: [], subtasks: [] }); setTaskModalOpen(true) }} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2"><Plus size={16} /> Nueva Tarea</button>
+        </header>
+
+        <div className="flex-1 overflow-auto p-8">
+          {currentView === 'dashboard' && <DashboardView />}
+
+          {currentView === 'projects' && !selectedProjectId && (
+            <div className="space-y-4">
+              <div className="flex justify-between"><h2 className="text-2xl font-bold">Proyectos</h2><button onClick={() => setProjectModalOpen(true)} className="text-indigo-400 text-sm">+ Nuevo</button></div>
+              <div className="grid grid-cols-3 gap-4">{getFilteredProjects().map(p => <Card key={p.id} className="cursor-pointer hover:border-indigo-500" onClick={() => { setSelectedProjectId(p.id); setCurrentView('projects') }}><h3 className="font-bold">{p.name}</h3><p className="text-xs text-zinc-500">{p.clientName}</p></Card>)}</div>
+            </div>
+          )}
+
+          {currentView === 'projects' && selectedProjectId && (
+            <div className="h-full flex flex-col">
+              <div className="flex items-center gap-4 mb-4"><button onClick={() => setSelectedProjectId(null)}><ArrowLeft /></button><h2 className="text-2xl font-bold">{projects.find(p => p.id === selectedProjectId)?.name}</h2></div>
+              <div className="flex-1 overflow-y-auto space-y-2">{getFilteredTasks().filter(t => t.projectId === selectedProjectId && t.status !== 'done').map(t => <TaskCard key={t.id} task={t} />)}</div>
+            </div>
+          )}
+
+          {currentView === 'tasks' && (
+            <div className="grid grid-cols-2 gap-6 h-full">
+              <div className="bg-zinc-900/20 border border-zinc-800 rounded-xl flex flex-col overflow-hidden">
+                <div className="p-3 border-b border-zinc-800 font-bold text-zinc-300">Pendientes</div>
+                <div className="flex-1 overflow-y-auto p-3">{getFilteredTasks().filter(t => t.status !== 'done').map(t => <TaskCard key={t.id} task={t} />)}</div>
+              </div>
+              <div className="bg-zinc-900/20 border border-zinc-800 rounded-xl flex flex-col overflow-hidden">
+                <div className="p-3 border-b border-zinc-800 font-bold text-zinc-500">Finalizadas</div>
+                <div className="flex-1 overflow-y-auto p-3 opacity-50">{getFilteredTasks().filter(t => t.status === 'done').map(t => <TaskCard key={t.id} task={t} />)}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 🟢 LISTA DE CLIENTES */}
+          {currentView === 'clients' && !selectedClientId && (
+            <div className="space-y-4">
+              <div className="flex justify-between"><h2 className="text-2xl font-bold">Clientes</h2><button onClick={() => setClientModalOpen(true)} className="text-indigo-400 text-sm">+ Nuevo</button></div>
+              <div className="grid grid-cols-3 gap-4">{clients.map(c => <Card key={c.id} className="cursor-pointer hover:border-emerald-500" onClick={() => { setSelectedClientId(c.id); setCurrentView('clients') }}><h3 className="font-bold">{c.name}</h3><Badge color={c.status === 'activo' ? 'green' : 'gray'}>{c.status}</Badge></Card>)}</div>
+            </div>
+          )}
+
+          {/* 🟢 DETALLE DE CLIENTE (ESTO ERA LO QUE FALTABA) */}
+          {currentView === 'clients' && selectedClientId && (
+            <div className="h-full flex flex-col">
+              <div className="flex items-center gap-4 mb-6">
+                <button onClick={() => setSelectedClientId(null)} className="p-2 hover:bg-zinc-800 rounded-full"><ArrowLeft /></button>
+                <div>
+                  <h2 className="text-2xl font-bold">{clients.find(c => c.id === selectedClientId)?.name}</h2>
+                  <p className="text-zinc-500 text-sm">{clients.find(c => c.id === selectedClientId)?.contactPerson}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-bold text-zinc-300">Proyectos Asociados</h3>
+                  <button
+                    onClick={() => {
+                      // Pre-llenamos el modal de proyecto con este cliente
+                      setNewProject({ name: '', clientId: selectedClientId, lead: '' });
+                      setProjectModalOpen(true);
+                    }}
+                    className="text-indigo-400 text-sm hover:underline"
+                  >
+                    + Conectar Nuevo Proyecto
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  {projects.filter(p => p.clientId === selectedClientId).map(p => (
+                    <Card key={p.id} className="cursor-pointer hover:border-indigo-500" onClick={() => { setSelectedProjectId(p.id); setCurrentView('projects') }}>
+                      <h3 className="font-bold">{p.name}</h3>
+                      <p className="text-xs text-zinc-500">Click para ver tareas</p>
+                    </Card>
+                  ))}
+                  {projects.filter(p => p.clientId === selectedClientId).length === 0 && (
+                    <div className="col-span-3 text-zinc-600 italic py-4">No hay proyectos conectados aún.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentView === 'team' && (
+            <div className="space-y-4">
+              <div className="flex justify-between"><h2 className="text-2xl font-bold">Equipo</h2><button onClick={() => setUserModalOpen(true)} className="text-indigo-400 text-sm">+ Nuevo</button></div>
+              <div className="grid grid-cols-3 gap-4">{teamMembers.map(m => <Card key={m.id}><h3 className="font-bold">{m.name}</h3><p className="text-sm text-zinc-500">{m.role}</p></Card>)}</div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* MODAL: CREATE TASK */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <Card className="w-full max-w-lg">
+            <h3 className="text-lg font-bold mb-4">Nueva Tarea</h3>
+            <Input placeholder="Título" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} autoFocus />
+            <Select options={[{ value: '', label: 'Sin Proyecto' }, ...projects.map(p => ({ value: p.id, label: p.name }))]} onChange={e => setNewTask({ ...newTask, projectId: e.target.value })} />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setTaskModalOpen(false)} className="text-zinc-400 hover:text-white px-4 py-2">Cancelar</button>
+              <button onClick={handleAddTask} className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-500">Crear Tarea</button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* MODAL: EDIT TASK (DETAIL) */}
+      {isDetailModalOpen && editingTask && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <input className="bg-transparent text-xl font-bold text-white border-none focus:ring-0 w-full" value={editingTask.title} onChange={e => setEditingTask({ ...editingTask, title: e.target.value })} />
+              <button onClick={() => setDetailModalOpen(false)}><X className="text-zinc-500" /></button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="text-xs text-zinc-500 block mb-2">CHECKLIST</label>
+                <div className="space-y-2">
+                  {editingTask.subtasks?.map(sub => (
+                    <div key={sub.id} className="flex items-center gap-2 bg-zinc-950 p-2 rounded border border-zinc-800 group">
+                      <div className={`w-4 h-4 border rounded cursor-pointer ${sub.completed ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'}`} onClick={() => {
+                        const updated = editingTask.subtasks.map(s => s.id === sub.id ? { ...s, completed: !s.completed } : s);
+                        setEditingTask({ ...editingTask, subtasks: updated });
+                      }}></div>
+                      <input className="bg-transparent text-sm text-zinc-300 flex-1 border-none focus:ring-0" value={sub.title} onChange={e => {
+                        const updated = editingTask.subtasks.map(s => s.id === sub.id ? { ...s, title: e.target.value } : s);
+                        setEditingTask({ ...editingTask, subtasks: updated });
+                      }} />
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleConvertSubtaskToTask(sub.id); }}
+                        className="p-1 bg-zinc-800 hover:bg-indigo-600 rounded text-zinc-400 hover:text-white transition-colors"
+                        title="Convertir en Tarea Principal"
+                      >
+                        <ArrowUpRight size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2 mt-2">
+                    <input className="flex-1 bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-sm" placeholder="Nueva subtarea..." value={tempSubtask} onChange={e => setTempSubtask(e.target.value)} onKeyDown={e => {
+                      if (e.key === 'Enter' && tempSubtask.trim()) {
+                        setEditingTask({ ...editingTask, subtasks: [...(editingTask.subtasks || []), { id: Math.random().toString(), title: tempSubtask, completed: false, assignees: [] }] });
+                        setTempSubtask('');
+                      }
+                    }} />
+                    <button onClick={() => {
+                      if (tempSubtask.trim()) {
+                        setEditingTask({ ...editingTask, subtasks: [...(editingTask.subtasks || []), { id: Math.random().toString(), title: tempSubtask, completed: false, assignees: [] }] });
+                        setTempSubtask('');
+                      }
+                    }} className="bg-zinc-800 px-3 rounded text-zinc-300">+</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 block mb-2">DETALLES</label>
+                <textarea className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-zinc-300 mb-4" rows={5} placeholder="Notas..." value={editingTask.notes} onChange={e => setEditingTask({ ...editingTask, notes: e.target.value })} />
+                <label className="text-xs text-zinc-500 block mb-1">Fecha Límite</label>
+                <input type="date" className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-zinc-300" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800">
+              <button className="text-red-400 hover:text-red-300 text-sm px-3" onClick={handleDeleteTask}>Eliminar Tarea</button>
+              <button onClick={handleSaveChanges} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded flex items-center gap-2"><Save size={16} /> Guardar Cambios</button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* SIMPLE MODALS (Projects, Clients, Team) */}
+      {isProjectModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <h3 className="mb-4 font-bold">Nuevo Proyecto</h3>
+            <Input placeholder="Nombre" value={newProject.name} onChange={e => setNewProject({ ...newProject, name: e.target.value })} />
+            {/* 🟢 Si estamos en un cliente específico, no mostramos el selector, lo asignamos auto */}
+            {!newProject.clientId && (
+              <Select options={[{ value: '', label: 'Seleccionar Cliente' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} onChange={e => setNewProject({ ...newProject, clientId: e.target.value })} />
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setProjectModalOpen(false)} className="text-zinc-400">Cancelar</button>
+              <button onClick={async () => {
+                await supabase.from('projects').insert([{ ...newProject, status: 'activo', createdAt: new Date().toISOString() }]);
+                fetchData();
+                setProjectModalOpen(false);
+              }} className="bg-indigo-600 text-white px-3 py-1 rounded">Crear</button>
+            </div>
+          </Card>
+        </div>
+      )}
+      {isClientModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <h3 className="mb-4 font-bold">Nuevo Cliente</h3>
+            <Input placeholder="Nombre" value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setClientModalOpen(false)} className="text-zinc-400">Cancelar</button>
+              <button onClick={async () => {
+                await supabase.from('clients').insert([{ ...newClient, status: 'activo', createdAt: new Date().toISOString() }]);
+                fetchData();
+                setClientModalOpen(false);
+              }} className="bg-indigo-600 text-white px-3 py-1 rounded">Crear</button>
+            </div>
+          </Card>
+        </div>
+      )}
+      {isUserModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <h3 className="mb-4 font-bold">Nuevo Miembro</h3>
+            <Input placeholder="Nombre" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setUserModalOpen(false)} className="text-zinc-400">Cancelar</button>
+              <button onClick={async () => {
+                await supabase.from('team').insert([{ ...newUser, createdAt: new Date().toISOString() }]);
+                fetchData();
+                setUserModalOpen(false);
+              }} className="bg-indigo-600 text-white px-3 py-1 rounded">Crear</button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+    </div>
+  );
+}
