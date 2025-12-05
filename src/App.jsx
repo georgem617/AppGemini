@@ -56,7 +56,6 @@ export default function AppGemini() {
   const [newProject, setNewProject] = useState({ name: '', clientId: '', lead: '' });
   const [newClient, setNewClient] = useState({ name: '', contactPerson: '', email: '' });
   const [newUser, setNewUser] = useState({ name: '', role: '', email: '' });
-  const [tempSubtask, setTempSubtask] = useState('');
 
   // Data Fetching with error handling
   const fetchData = async () => {
@@ -181,51 +180,11 @@ export default function AppGemini() {
     }
   };
 
-  const handleConvertSubtaskToTask = async (subId) => {
-    const subtask = editingTask.subtasks.find(s => s.id === subId);
-    if (!subtask) return;
-
-    if (!confirm(`¿Crear tarea nueva a partir de "${subtask.title}"?`)) return;
-
-    const updatedSubtasks = editingTask.subtasks.filter(s => s.id !== subId);
-    setEditingTask({ ...editingTask, subtasks: updatedSubtasks });
-
-    await supabase.from('tasks').update({ subtasks: updatedSubtasks }).eq('id', editingTask.id);
-    await supabase.from('tasks').insert([{
-      title: subtask.title,
-      status: 'todo',
-      priority: editingTask.priority,
-      projectId: editingTask.projectId || '',
-      projectName: editingTask.projectName || '',
-      plannedDay: 'backlog',
-      assignees: subtask.assignees || [],
-      dueDate: '',
-      subtasks: [],
-      createdAt: new Date().toISOString()
-    }]);
-
-    fetchData();
-    alert("✅ Subtarea convertida correctamente.");
-  };
-
   const handleDeleteTask = async () => {
     if (confirm("¿Eliminar permanentemente?")) {
       await supabase.from('tasks').delete().eq('id', editingTask.id);
       fetchData();
       setDetailModalOpen(false);
-    }
-  };
-
-  const handleSubtaskAdd = () => {
-    if (tempSubtask.trim()) {
-      setEditingTask({
-        ...editingTask,
-        subtasks: [
-          ...(editingTask.subtasks || []),
-          { id: crypto.randomUUID(), title: tempSubtask, completed: false, assignees: [] }
-        ]
-      });
-      setTempSubtask('');
     }
   };
 
@@ -542,12 +501,9 @@ export default function AppGemini() {
       <TaskDetailModal
         isOpen={isDetailModalOpen}
         editingTask={editingTask}
-        tempSubtask={tempSubtask}
+        teamMembers={teamMembers}
         onClose={() => setDetailModalOpen(false)}
         onChange={setEditingTask}
-        onSubtaskChange={setTempSubtask}
-        onSubtaskAdd={handleSubtaskAdd}
-        onConvertSubtaskToTask={handleConvertSubtaskToTask}
         onSave={handleSaveChanges}
         onDelete={handleDeleteTask}
       />
