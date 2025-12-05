@@ -22,7 +22,7 @@ const supabaseKey = 'sb_publishable_vq0BfFF__Py353xRWIgTiw_P-WrHsAm';
 const supabase = createClient(supabaseUrl, supabaseKey);
 const appId = 'agency-os-default';
 
-export default function AgencyOS() {
+export default function AppGemini() {
   // View State
   const [currentView, setCurrentView] = useState('dashboard');
   const [filterUser, setFilterUser] = useState('all');
