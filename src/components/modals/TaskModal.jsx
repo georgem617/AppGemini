@@ -1,11 +1,13 @@
 import Card from '../ui/Card';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
+import UserMultiSelect from '../ui/UserMultiSelect';
 
 export default function TaskModal({
     isOpen,
     newTask,
     projects,
+    teamMembers = [],
     onClose,
     onChange,
     onSubmit
@@ -28,6 +30,12 @@ export default function TaskModal({
                         ...projects.map(p => ({ value: p.id, label: p.name }))
                     ]}
                     onChange={e => onChange({ ...newTask, projectId: e.target.value })}
+                />
+                <UserMultiSelect
+                    label="Asignar a"
+                    selectedUsers={newTask.assignees || []}
+                    availableUsers={teamMembers}
+                    onChange={assignees => onChange({ ...newTask, assignees })}
                 />
                 <div className="flex justify-end gap-2 mt-4">
                     <button

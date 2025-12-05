@@ -43,9 +43,29 @@ export default function TaskCard({ task, onTaskClick, onStatusToggle }) {
                         </div>
                     </div>
                 </div>
-                <Badge color={task.priority === 'alta' ? 'red' : 'gray'}>
-                    {task.priority}
-                </Badge>
+                <div className="flex gap-2 items-center">
+                    {task.assignees && task.assignees.length > 0 && (
+                        <div className="flex -space-x-2">
+                            {task.assignees.slice(0, 3).map((userId, idx) => (
+                                <div
+                                    key={idx}
+                                    className="w-5 h-5 bg-zinc-700 rounded-full flex items-center justify-center text-[9px] text-zinc-200 font-bold border border-zinc-800"
+                                    title={userId}
+                                >
+                                    {userId.substring(0, 2).toUpperCase()}
+                                </div>
+                            ))}
+                            {task.assignees.length > 3 && (
+                                <div className="w-5 h-5 bg-zinc-700 rounded-full flex items-center justify-center text-[9px] text-zinc-400 border border-zinc-800">
+                                    +{task.assignees.length - 3}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <Badge color={task.priority === 'alta' ? 'red' : 'gray'}>
+                        {task.priority}
+                    </Badge>
+                </div>
             </div>
             {totalSub > 0 && (
                 <div className="mt-2 flex items-center gap-2 pl-7">

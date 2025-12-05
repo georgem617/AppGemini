@@ -1,5 +1,6 @@
 import { BarChart2 } from 'lucide-react';
 import Card from './ui/Card';
+import ProjectStatusChart from './ProjectStatusChart';
 
 export default function DashboardView({
     filteredProjects,
@@ -9,28 +10,43 @@ export default function DashboardView({
 }) {
     const total = filteredTasks.length;
     const done = filteredTasks.filter(t => t.status === 'done').length;
+    const inProgress = filteredTasks.filter(t => t.status !== 'done' && t.status !== 'backlog').length;
+    const backlog = filteredTasks.filter(t => t.status === 'backlog').length;
 
     return (
         <div className="space-y-6">
+            {/* KPIs en Tiempo Real */}
             <div className="grid grid-cols-4 gap-4">
                 <Card className="h-24 flex flex-col justify-between border-l-4 border-l-zinc-600">
                     <span className="text-xs text-zinc-500 font-bold">TOTAL</span>
                     <span className="text-3xl font-bold text-white">{total}</span>
                 </Card>
                 <Card className="h-24 flex flex-col justify-between border-l-4 border-l-emerald-500">
-                    <span className="text-xs text-zinc-500 font-bold">HECHAS</span>
+                    <span className="text-xs text-zinc-500 font-bold">COMPLETADAS</span>
                     <span className="text-3xl font-bold text-white">{done}</span>
                 </Card>
                 <Card className="h-24 flex flex-col justify-between border-l-4 border-l-indigo-500">
-                    <span className="text-xs text-zinc-500 font-bold">PENDIENTES</span>
-                    <span className="text-3xl font-bold text-white">{total - done}</span>
+                    <span className="text-xs text-zinc-500 font-bold">EN PROGRESO</span>
+                    <span className="text-3xl font-bold text-white">{inProgress}</span>
+                </Card>
+                <Card className="h-24 flex flex-col justify-between border-l-4 border-l-amber-500">
+                    <span className="text-xs text-zinc-500 font-bold">BACKLOG</span>
+                    <span className="text-3xl font-bold text-white">{backlog}</span>
                 </Card>
             </div>
 
+            {/* Gráfica de Estado de Proyectos con Drilldown */}
+            <ProjectStatusChart
+                projects={filteredProjects}
+                tasks={tasks}
+                onProjectClick={onProjectClick}
+            />
+
+            {/* Avance Detallado por Proyecto */}
             <div className="grid grid-cols-2 gap-6">
                 <Card>
                     <h3 className="font-bold mb-4 flex items-center gap-2 text-white">
-                        <BarChart2 size={18} /> Avance Proyectos
+                        <BarChart2 size={18} /> Avance Detallado
                     </h3>
                     <div className="space-y-3">
                         {filteredProjects.map(p => {
@@ -49,16 +65,16 @@ export default function DashboardView({
                             return (
                                 <div
                                     key={p.id}
-                                    className="cursor-pointer"
+                                    className="cursor-pointer hover:bg-zinc-800/50 p-2 rounded transition-colors"
                                     onClick={() => onProjectClick(p.id)}
                                 >
                                     <div className="flex justify-between text-xs mb-1 text-zinc-300">
-                                        <span>{p.name}</span>
-                                        <span>{pct}%</span>
+                                        <span className="font-medium">{p.name}</span>
+                                        <span className="text-zinc-500">{completed}/{items} · {pct}%</span>
                                     </div>
                                     <div className="w-full h-2 bg-zinc-800 rounded-full">
                                         <div
-                                            className="h-full bg-indigo-500 rounded-full"
+                                            className="h-full bg-indigo-500 rounded-full transition-all"
                                             style={{ width: `${pct}%` }}
                                         ></div>
                                     </div>

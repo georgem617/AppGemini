@@ -1,15 +1,13 @@
-import { X, Save, ArrowUpRight } from 'lucide-react';
+import { X, Save } from 'lucide-react';
 import Card from '../ui/Card';
+import SubtaskEditor from '../SubtaskEditor';
 
 export default function TaskDetailModal({
     isOpen,
     editingTask,
-    tempSubtask,
+    teamMembers = [],
     onClose,
     onChange,
-    onSubtaskChange,
-    onSubtaskAdd,
-    onConvertSubtaskToTask,
     onSave,
     onDelete
 }) {
@@ -31,66 +29,11 @@ export default function TaskDetailModal({
 
                 <div className="grid grid-cols-2 gap-6">
                     <div>
-                        <label className="text-xs text-zinc-500 block mb-2">CHECKLIST</label>
-                        <div className="space-y-2">
-                            {editingTask.subtasks?.map(sub => (
-                                <div
-                                    key={sub.id}
-                                    className="flex items-center gap-2 bg-zinc-950 p-2 rounded border border-zinc-800 group"
-                                >
-                                    <div
-                                        className={`w-4 h-4 border rounded cursor-pointer ${sub.completed ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
-                                            }`}
-                                        onClick={() => {
-                                            const updated = editingTask.subtasks.map(s =>
-                                                s.id === sub.id ? { ...s, completed: !s.completed } : s
-                                            );
-                                            onChange({ ...editingTask, subtasks: updated });
-                                        }}
-                                    ></div>
-                                    <input
-                                        className="bg-transparent text-sm text-zinc-300 flex-1 border-none focus:ring-0"
-                                        value={sub.title}
-                                        onChange={e => {
-                                            const updated = editingTask.subtasks.map(s =>
-                                                s.id === sub.id ? { ...s, title: e.target.value } : s
-                                            );
-                                            onChange({ ...editingTask, subtasks: updated });
-                                        }}
-                                    />
-                                    <button
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            onConvertSubtaskToTask(sub.id);
-                                        }}
-                                        className="p-1 bg-zinc-800 hover:bg-indigo-600 rounded text-zinc-400 hover:text-white transition-colors"
-                                        title="Convertir en Tarea Principal"
-                                    >
-                                        <ArrowUpRight size={14} />
-                                    </button>
-                                </div>
-                            ))}
-                            <div className="flex gap-2 mt-2">
-                                <input
-                                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-sm"
-                                    placeholder="Nueva subtarea..."
-                                    value={tempSubtask}
-                                    onChange={e => onSubtaskChange(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && tempSubtask.trim()) {
-                                            onSubtaskAdd();
-                                        }
-                                    }}
-                                />
-                                <button
-                                    onClick={onSubtaskAdd}
-                                    className="bg-zinc-800 px-3 rounded text-zinc-300"
-                                >
-                                    +
-                                </button>
-                            </div>
-                        </div>
+                        <SubtaskEditor
+                            subtasks={editingTask.subtasks || []}
+                            teamMembers={teamMembers}
+                            onChange={(updatedSubtasks) => onChange({ ...editingTask, subtasks: updatedSubtasks })}
+                        />
                     </div>
                     <div>
                         <label className="text-xs text-zinc-500 block mb-2">DETALLES</label>

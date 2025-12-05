@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { Plus, Filter, ArrowLeft } from 'lucide-react';
+
+// Config
+import { supabase } from './config/supabase';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -8,6 +10,8 @@ import TaskCard from './components/TaskCard';
 import DashboardView from './components/DashboardView';
 import Card from './components/ui/Card';
 import Badge from './components/ui/Badge';
+import LoadingSpinner from './components/ui/LoadingSpinner';
+import ErrorMessage from './components/ui/ErrorMessage';
 
 // Modals
 import TaskModal from './components/modals/TaskModal';
@@ -16,11 +20,8 @@ import ProjectModal from './components/modals/ProjectModal';
 import ClientModal from './components/modals/ClientModal';
 import UserModal from './components/modals/UserModal';
 
-// Supabase Configuration
-const supabaseUrl = 'https://fauoeaxmiaezeuueaudd.supabase.co';
-const supabaseKey = 'sb_publishable_vq0BfFF__Py353xRWIgTiw_P-WrHsAm';
-const supabase = createClient(supabaseUrl, supabaseKey);
-const appId = 'agency-os-default';
+// Utils
+import { validateTaskTitle } from './utils/validation';
 
 export default function AppGemini() {
   // View State
@@ -34,6 +35,10 @@ export default function AppGemini() {
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+
+  // Loading & Error State
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Modal State
   const [isTaskModalOpen, setTaskModalOpen] = useState(false);
@@ -53,17 +58,32 @@ export default function AppGemini() {
   const [newUser, setNewUser] = useState({ name: '', role: '', email: '' });
   const [tempSubtask, setTempSubtask] = useState('');
 
-  // Data Fetching
+  // Data Fetching with error handling
   const fetchData = async () => {
-    const { data: t } = await supabase.from('tasks').select('*');
-    const { data: p } = await supabase.from('projects').select('*');
-    const { data: c } = await supabase.from('clients').select('*');
-    const { data: tm } = await supabase.from('team').select('*');
+    try {
+      setIsLoading(true);
+      setError(null);
 
-    if (t) setTasks(t);
-    if (p) setProjects(p);
-    if (c) setClients(c);
-    if (tm) setTeamMembers(tm);
+      const { data: t, error: tErr } = await supabase.from('tasks').select('*');
+      const { data: p, error: pErr } = await supabase.from('projects').select('*');
+      const { data: c, error: cErr } = await supabase.from('clients').select('*');
+      const { data: tm, error: tmErr } = await supabase.from('team').select('*');
+
+      if (tErr) throw new Error(`Error al cargar tareas: ${tErr.message}`);
+      if (pErr) throw new Error(`Error al cargar proyectos: ${pErr.message}`);
+      if (cErr) throw new Error(`Error al cargar clientes: ${cErr.message}`);
+      if (tmErr) throw new Error(`Error al cargar equipo: ${tmErr.message}`);
+
+      if (t) setTasks(t);
+      if (p) setProjects(p);
+      if (c) setClients(c);
+      if (tm) setTeamMembers(tm);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err.message || 'Error al cargar datos');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -76,48 +96,89 @@ export default function AppGemini() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Handlers
+  // Handlers with error handling
   const handleAddTask = async () => {
-    if (!newTask.title) return;
-    let finalProjectName = newTask.projectName;
-    if (newTask.projectId) {
-      const p = projects.find(proj => proj.id === newTask.projectId);
-      if (p) finalProjectName = p.name;
+    try {
+      // Validate
+      const validation = validateTaskTitle(newTask.title);
+      if (!validation.isValid) {
+        setError(validation.error);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      let finalProjectName = newTask.projectName;
+      if (newTask.projectId) {
+        const p = projects.find(proj => proj.id === newTask.projectId);
+        if (p) finalProjectName = p.name;
+      }
+
+      const { error: insertError } = await supabase.from('tasks').insert([{
+        ...newTask,
+        projectName: finalProjectName,
+        createdAt: new Date().toISOString()
+      }]);
+
+      if (insertError) throw new Error(insertError.message);
+
+      await fetchData();
+      setTaskModalOpen(false);
+      setNewTask({
+        title: '', status: 'backlog', priority: 'media', projectId: '', projectName: '',
+        plannedDay: 'backlog', recurrence: 'none', dueDate: '', assignees: [], subtasks: []
+      });
+    } catch (err) {
+      console.error('Error adding task:', err);
+      setError('Error al crear tarea: ' + err.message);
+    } finally {
+      setIsLoading(false);
     }
-
-    await supabase.from('tasks').insert([{
-      ...newTask,
-      projectName: finalProjectName,
-      createdAt: new Date().toISOString()
-    }]);
-
-    fetchData();
-    setTaskModalOpen(false);
-    setNewTask({
-      title: '', status: 'backlog', priority: 'media', projectId: '', projectName: '',
-      plannedDay: 'backlog', recurrence: 'none', dueDate: '', assignees: [], subtasks: []
-    });
   };
 
   const handleSaveChanges = async () => {
     if (!editingTask) return;
-    await supabase.from('tasks').update({
-      title: editingTask.title,
-      status: editingTask.status,
-      priority: editingTask.priority,
-      assignees: editingTask.assignees,
-      subtasks: editingTask.subtasks,
-      notes: editingTask.notes,
-      dueDate: editingTask.dueDate
-    }).eq('id', editingTask.id);
 
-    fetchData();
-    setDetailModalOpen(false);
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const { error: updateError } = await supabase.from('tasks').update({
+        title: editingTask.title,
+        status: editingTask.status,
+        priority: editingTask.priority,
+        assignees: editingTask.assignees,
+        subtasks: editingTask.subtasks,
+        notes: editingTask.notes,
+        dueDate: editingTask.dueDate
+      }).eq('id', editingTask.id);
+
+      if (updateError) throw new Error(updateError.message);
+
+      await fetchData();
+      setDetailModalOpen(false);
+    } catch (err) {
+      console.error('Error saving changes:', err);
+      setError('Error al guardar cambios: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
-    await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
-    fetchData();
+    try {
+      const { error: updateError } = await supabase.from('tasks')
+        .update({ status: newStatus })
+        .eq('id', taskId);
+
+      if (updateError) throw new Error(updateError.message);
+
+      await fetchData();
+    } catch (err) {
+      console.error('Error updating task status:', err);
+      setError('Error al actualizar estado de tarea');
+    }
   };
 
   const handleConvertSubtaskToTask = async (subId) => {
@@ -161,7 +222,7 @@ export default function AppGemini() {
         ...editingTask,
         subtasks: [
           ...(editingTask.subtasks || []),
-          { id: Math.random().toString(), title: tempSubtask, completed: false, assignees: [] }
+          { id: crypto.randomUUID(), title: tempSubtask, completed: false, assignees: [] }
         ]
       });
       setTempSubtask('');
@@ -200,6 +261,9 @@ export default function AppGemini() {
 
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
+      {/* Error Message */}
+      <ErrorMessage message={error} onClose={() => setError(null)} />
+
       <Sidebar currentView={currentView} onViewChange={handleViewChange} />
 
       <main className="flex-1 flex flex-col h-full overflow-hidden">
@@ -234,7 +298,17 @@ export default function AppGemini() {
         </header>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-auto p-8">
+        <div className="flex-1 overflow-auto p-8 relative">
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-zinc-950/50 flex items-center justify-center z-40">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 flex flex-col items-center gap-3">
+                <LoadingSpinner size="lg" />
+                <p className="text-sm text-zinc-400">Cargando...</p>
+              </div>
+            </div>
+          )}
+
           {/* Dashboard View */}
           {currentView === 'dashboard' && (
             <DashboardView
@@ -459,6 +533,7 @@ export default function AppGemini() {
         isOpen={isTaskModalOpen}
         newTask={newTask}
         projects={projects}
+        teamMembers={teamMembers}
         onClose={() => setTaskModalOpen(false)}
         onChange={setNewTask}
         onSubmit={handleAddTask}
