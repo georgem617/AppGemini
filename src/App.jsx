@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Filter, ArrowLeft } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // Config
 import { supabase } from './config/supabase';
@@ -12,6 +13,12 @@ import Card from './components/ui/Card';
 import Badge from './components/ui/Badge';
 import LoadingSpinner from './components/ui/LoadingSpinner';
 import ErrorMessage from './components/ui/ErrorMessage';
+
+// Views
+import TasksView from './views/TasksView';
+import ProjectsView from './views/ProjectsView';
+import ClientsView from './views/ClientsView';
+import TeamView from './views/TeamView';
 
 // Modals
 import TaskModal from './components/modals/TaskModal';
@@ -284,250 +291,115 @@ export default function AppGemini() {
             </div>
           )}
 
-          {/* Dashboard View */}
-          {currentView === 'dashboard' && (
-            <DashboardView
-              filteredProjects={getFilteredProjects()}
-              filteredTasks={getFilteredTasks()}
-              tasks={tasks}
-              onProjectClick={handleProjectClick}
-            />
-          )}
+          {/* Main Content Area with Transitions */}
 
-          {/* Projects List */}
-          {currentView === 'projects' && !selectedProjectId && (
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <h2 className="text-2xl font-bold">Proyectos</h2>
-                <button
-                  onClick={() => setProjectModalOpen(true)}
-                  className="text-indigo-400 text-sm"
-                >
-                  + Nuevo
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                {getFilteredProjects().map(p => (
-                  <Card
-                    key={p.id}
-                    className="cursor-pointer hover:border-indigo-500"
-                    onClick={() => handleProjectClick(p.id)}
-                  >
-                    <h3 className="font-bold">{p.name}</h3>
-                    <p className="text-xs text-zinc-500">{p.clientName}</p>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {/* Dashboard View */}
+            {currentView === 'dashboard' && (
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                <DashboardView
+                  filteredProjects={getFilteredProjects()}
+                  filteredTasks={getFilteredTasks()}
+                  tasks={tasks}
+                  onProjectClick={handleProjectClick}
+                />
+              </motion.div>
+            )}
 
-          {/* Project Detail */}
-          {currentView === 'projects' && selectedProjectId && (
-            <div className="h-full flex flex-col">
-              <div className="flex items-center gap-4 mb-4">
-                <button onClick={() => setSelectedProjectId(null)}>
-                  <ArrowLeft />
-                </button>
-                <h2 className="text-2xl font-bold">
-                  {projects.find(p => p.id === selectedProjectId)?.name}
-                </h2>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-2">
-                <div className="space-y-6">
-                  {/* Pendientes */}
-                  <div>
-                    <h3 className="text-sm font-bold text-zinc-400 mb-2 uppercase tracking-wider">Pendientes</h3>
-                    <div className="space-y-2">
-                      {getFilteredTasks()
-                        .filter(t => t.projectId === selectedProjectId && t.status !== 'done')
-                        .map(t => (
-                          <TaskCard
-                            key={t.id}
-                            task={t}
-                            onTaskClick={handleTaskClick}
-                            onStatusToggle={handleUpdateTaskStatus}
-                          />
-                        ))}
-                      {getFilteredTasks().filter(t => t.projectId === selectedProjectId && t.status !== 'done').length === 0 && (
-                        <p className="text-zinc-600 text-sm italic">No hay tareas pendientes</p>
-                      )}
-                    </div>
-                  </div>
+            {/* Projects View */}
+            {currentView === 'projects' && (
+              <motion.div
+                key="projects"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                <ProjectsView
+                  projects={getFilteredProjects()}
+                  tasks={getFilteredTasks()}
+                  selectedProjectId={selectedProjectId}
+                  onProjectClick={handleProjectClick}
+                  onBack={() => setSelectedProjectId(null)}
+                  onNewProject={() => setProjectModalOpen(true)}
+                  onTaskClick={handleTaskClick}
+                  onStatusToggle={handleUpdateTaskStatus}
+                />
+              </motion.div>
+            )}
 
-                  {/* Completadas */}
-                  <div>
-                    <h3 className="text-sm font-bold text-zinc-500 mb-2 uppercase tracking-wider">Completadas</h3>
-                    <div className="space-y-2 opacity-60">
-                      {getFilteredTasks()
-                        .filter(t => t.projectId === selectedProjectId && t.status === 'done')
-                        .map(t => (
-                          <TaskCard
-                            key={t.id}
-                            task={t}
-                            onTaskClick={handleTaskClick}
-                            onStatusToggle={handleUpdateTaskStatus}
-                          />
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+            {/* Tasks View */}
+            {currentView === 'tasks' && (
+              <motion.div
+                key="tasks"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                <TasksView
+                  tasks={getFilteredTasks()}
+                  onTaskClick={handleTaskClick}
+                  onStatusToggle={handleUpdateTaskStatus}
+                />
+              </motion.div>
+            )}
 
-          {/* Tasks View */}
-          {currentView === 'tasks' && (
-            <div className="grid grid-cols-2 gap-6 h-full">
-              <div className="bg-zinc-900/20 border border-zinc-800 rounded-xl flex flex-col overflow-hidden">
-                <div className="p-3 border-b border-zinc-800 font-bold text-zinc-300">
-                  Pendientes
-                </div>
-                <div className="flex-1 overflow-y-auto p-3">
-                  {getFilteredTasks()
-                    .filter(t => t.status !== 'done')
-                    .map(t => (
-                      <TaskCard
-                        key={t.id}
-                        task={t}
-                        onTaskClick={handleTaskClick}
-                        onStatusToggle={handleUpdateTaskStatus}
-                      />
-                    ))}
-                </div>
-              </div>
-              <div className="bg-zinc-900/20 border border-zinc-800 rounded-xl flex flex-col overflow-hidden">
-                <div className="p-3 border-b border-zinc-800 font-bold text-zinc-500">
-                  Finalizadas
-                </div>
-                <div className="flex-1 overflow-y-auto p-3 opacity-50">
-                  {getFilteredTasks()
-                    .filter(t => t.status === 'done')
-                    .map(t => (
-                      <TaskCard
-                        key={t.id}
-                        task={t}
-                        onTaskClick={handleTaskClick}
-                        onStatusToggle={handleUpdateTaskStatus}
-                      />
-                    ))}
-                </div>
-              </div>
-            </div>
-          )}
+            {/* Clients View */}
+            {currentView === 'clients' && (
+              <motion.div
+                key="clients"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                <ClientsView
+                  clients={clients}
+                  projects={projects}
+                  selectedClientId={selectedClientId}
+                  onClientClick={(id) => {
+                    setSelectedClientId(id);
+                    setCurrentView('clients');
+                  }}
+                  onBack={() => setSelectedClientId(null)}
+                  onNewClient={() => setClientModalOpen(true)}
+                  onNewProject={() => {
+                    setNewProject({ name: '', clientId: selectedClientId, lead: '' });
+                    setProjectModalOpen(true);
+                  }}
+                  onProjectClick={handleProjectClick}
+                />
+              </motion.div>
+            )}
 
-          {/* Clients List */}
-          {currentView === 'clients' && !selectedClientId && (
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <h2 className="text-2xl font-bold">Clientes</h2>
-                <button
-                  onClick={() => setClientModalOpen(true)}
-                  className="text-indigo-400 text-sm"
-                >
-                  + Nuevo
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                {clients.map(c => (
-                  <Card
-                    key={c.id}
-                    className="cursor-pointer hover:border-emerald-500"
-                    onClick={() => {
-                      setSelectedClientId(c.id);
-                      setCurrentView('clients');
-                    }}
-                  >
-                    <h3 className="font-bold">{c.name}</h3>
-                    <Badge color={c.status === 'activo' ? 'green' : 'gray'}>
-                      {c.status}
-                    </Badge>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Client Detail */}
-          {currentView === 'clients' && selectedClientId && (
-            <div className="h-full flex flex-col">
-              <div className="flex items-center gap-4 mb-6">
-                <button
-                  onClick={() => setSelectedClientId(null)}
-                  className="p-2 hover:bg-zinc-800 rounded-full"
-                >
-                  <ArrowLeft />
-                </button>
-                <div>
-                  <h2 className="text-2xl font-bold">
-                    {clients.find(c => c.id === selectedClientId)?.name}
-                  </h2>
-                  <p className="text-zinc-500 text-sm">
-                    {clients.find(c => c.id === selectedClientId)?.contactPerson}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-bold text-zinc-300">
-                    Proyectos Asociados
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setNewProject({ name: '', clientId: selectedClientId, lead: '' });
-                      setProjectModalOpen(true);
-                    }}
-                    className="text-indigo-400 text-sm hover:underline"
-                  >
-                    + Conectar Nuevo Proyecto
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  {projects
-                    .filter(p => p.clientId === selectedClientId)
-                    .map(p => (
-                      <Card
-                        key={p.id}
-                        className="cursor-pointer hover:border-indigo-500"
-                        onClick={() => handleProjectClick(p.id)}
-                      >
-                        <h3 className="font-bold">{p.name}</h3>
-                        <p className="text-xs text-zinc-500">Click para ver tareas</p>
-                      </Card>
-                    ))}
-                  {projects.filter(p => p.clientId === selectedClientId).length === 0 && (
-                    <div className="col-span-3 text-zinc-600 italic py-4">
-                      No hay proyectos conectados aún.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Team View */}
-          {currentView === 'team' && (
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <h2 className="text-2xl font-bold">Equipo</h2>
-                <button
-                  onClick={() => setUserModalOpen(true)}
-                  className="text-indigo-400 text-sm"
-                >
-                  + Nuevo
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                {teamMembers.map(m => (
-                  <Card key={m.id}>
-                    <h3 className="font-bold">{m.name}</h3>
-                    <p className="text-sm text-zinc-500">{m.role}</p>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
+            {/* Team View */}
+            {currentView === 'team' && (
+              <motion.div
+                key="team"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                <TeamView
+                  teamMembers={teamMembers}
+                  onNewUser={() => setUserModalOpen(true)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </main>
 

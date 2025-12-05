@@ -15,7 +15,7 @@ export default function TaskDetailModal({
 
     return (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                     <input
                         className="bg-transparent text-xl font-bold text-white border-none focus:ring-0 w-full"
